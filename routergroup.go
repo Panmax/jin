@@ -2,7 +2,9 @@ package jin
 
 import (
 	"net/http"
+	"path"
 	"regexp"
+	"strings"
 )
 
 type IRouter interface {
@@ -26,7 +28,7 @@ type IRoutes interface {
 
 	StaticFile(string, string) IRoutes
 	Static(string, string) IRoutes
-	StaticFS(string, system http.FileSystem) IRoutes
+	StaticFS(string, http.FileSystem) IRoutes
 }
 
 // RouterGroup 用来内部配置路由，一个 RouterGroup 关联一个
@@ -105,6 +107,52 @@ func (group *RouterGroup) Any(relativePath string, handlers ...HandlerFunc) IRou
 	group.handle("CONNECT", relativePath, handlers)
 	group.handle("TRACH", relativePath, handlers)
 	return group.returnObj()
+}
+
+func (group *RouterGroup) StaticFile(relativePath, filepath string) IRoutes {
+	if strings.Contains(relativePath, ":") || strings.Contains(relativePath, "*") {
+		panic("URL parameters can not be used when serving a static file")
+	}
+	handler := func(c *Context) {
+		// TODO
+	}
+	group.GET(relativePath, handler)
+	group.HEAD(relativePath, handler)
+	return group.returnObj()
+}
+
+func (group *RouterGroup) Static(relativePath, root string) IRoutes {
+	return group.StaticFS(relativePath, Dir(root, false))
+}
+
+func (group *RouterGroup) StaticFS(relativePath string, fs http.FileSystem) IRoutes {
+	if strings.Contains(relativePath, ":") || strings.Contains(relativePath, "*") {
+		panic("URL parameters can not be used when serving a static folder")
+	}
+	handler := group.createStaticHandler(relativePath, fs)
+	urlPattern := path.Join(relativePath, "/*filepath")
+
+	group.GET(urlPattern, handler)
+	group.HEAD(urlPattern, handler)
+	return group.returnObj()
+}
+
+func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileSystem) HandlerFunc {
+	absolutePath := group.calculateAbsolutePath(relativePath)
+	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
+
+	return func(c *Context) {
+		// 断言
+		if _, nolisting := fs.(*onlyFilesFs); nolisting {
+			// TODO
+		}
+		// TODO
+	}
+
+}
+
+func (group *RouterGroup) calculateAbsolutePath(relativePath string) string {
+	return joinPaths(group.basePath, relativePath)
 }
 
 func (group *RouterGroup) returnObj() IRoutes {
