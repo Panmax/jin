@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// IRouter 定义了所有路由处理接口包括单个和群组路由
 type IRouter interface {
 	IRoutes
 	Group(string, ...HandlerFunc) *RouterGroup
@@ -42,11 +43,14 @@ type RouterGroup struct {
 
 var _ IRouter = &RouterGroup{} // 确保 RouterGroup 实现 IRouter 接口
 
+// Use 添加中间件到组
 func (group *RouterGroup) Use(middleware ...HandlerFunc) IRoutes {
 	group.Handlers = append(group.Handlers, middleware...)
 	return group.returnObj()
 }
 
+// Group 创建一个新的路由组，你应该将所有用共同中间件或相同前缀的路由加入进来
+// 比如，用了同样中间件来实现授权的路由可以放在同一组
 func (group *RouterGroup) Group(relativePath string, handlers ...HandlerFunc) *RouterGroup {
 	return &RouterGroup{
 		Handlers: group.combineHandlers(handlers),
