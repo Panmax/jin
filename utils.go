@@ -2,6 +2,12 @@ package jin
 
 import "path"
 
+func assert1(guard bool, text string) {
+	if !guard {
+		panic(text)
+	}
+}
+
 func lastChar(str string) uint8 {
 	if str == "" {
 		panic("The length of the string can't be 0")

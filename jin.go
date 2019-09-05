@@ -59,3 +59,18 @@ type Engine struct {
 }
 
 var _ IRouter = &Engine{} // 确保 Engine 实现 IRouter 接口
+
+func (engine *Engine) addRoute(method, path string, handlers HandlerChain) {
+	assert1(path[0] == '/', "path must begin with '/'")
+	assert1(method != "", "HTTP method can not be empty")
+	assert1(len(handlers) > 0, "there must be at least one handler")
+
+	debugPrintRoute(method, path, handlers)
+	root := engine.trees.get(method)
+	if root == nil {
+		root = new(node)
+		root.fullPath = "/"
+		engine.trees = append(engine.trees, methodTree{method: method, root: root})
+	}
+	root.addRoute(path, handlers)
+}
