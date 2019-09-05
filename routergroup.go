@@ -48,8 +48,11 @@ func (group *RouterGroup) Use(middleware ...HandlerFunc) IRoutes {
 }
 
 func (group *RouterGroup) Group(relativePath string, handlers ...HandlerFunc) *RouterGroup {
-	// TODO
-	return nil
+	return &RouterGroup{
+		Handlers: group.combineHandlers(handlers),
+		basePath: group.calculateAbsolutePath(relativePath),
+		engine:   group.engine,
+	}
 }
 
 func (group *RouterGroup) BasePath() string {
@@ -57,8 +60,10 @@ func (group *RouterGroup) BasePath() string {
 }
 
 func (group *RouterGroup) handle(httpMethod, relativePath string, handlers HandlerChain) IRoutes {
-	// TODO
-	return nil
+	absolutePath := group.calculateAbsolutePath(relativePath)
+	handlers = group.combineHandlers(handlers)
+	group.engine.addRoute(httpMethod, absolutePath, handlers)
+	return group.returnObj()
 }
 
 func (group *RouterGroup) Handle(httpMethod, relativePath string, handlers ...HandlerFunc) IRoutes {
@@ -114,7 +119,7 @@ func (group *RouterGroup) StaticFile(relativePath, filepath string) IRoutes {
 		panic("URL parameters can not be used when serving a static file")
 	}
 	handler := func(c *Context) {
-		// TODO
+		c.File(filepath)
 	}
 	group.GET(relativePath, handler)
 	group.HEAD(relativePath, handler)
@@ -142,13 +147,33 @@ func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileS
 	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
 
 	return func(c *Context) {
-		// 断言
+		// fs.(*onlyFilesFs) 断言 fs 是 onlyFilesFs 类型
 		if _, nolisting := fs.(*onlyFilesFs); nolisting {
-			// TODO
+			c.Writer.WriteHeader(http.StatusNotFound)
 		}
-		// TODO
+		file := c.Param("filepath")
+		if _, err := fs.Open(file); err != nil {
+			c.Writer.WriteHeader(http.StatusNotFound)
+			c.handlers = group.engine.noRoute
+
+			c.index = -1
+			return
+		}
+
+		fileServer.ServeHTTP(c.Writer, c.Request)
 	}
 
+}
+
+func (group *RouterGroup) combineHandlers(handlers HandlerChain) HandlerChain {
+	finalSize := len(group.Handlers) + len(handlers)
+	if finalSize >= int(abortIndex) {
+		panic("too many handlers")
+	}
+	mergedHandlers := make(HandlerChain, finalSize)
+	copy(mergedHandlers, group.Handlers)
+	copy(mergedHandlers[len(group.Handlers):], handlers)
+	return mergedHandlers
 }
 
 func (group *RouterGroup) calculateAbsolutePath(relativePath string) string {
