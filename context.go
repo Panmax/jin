@@ -4,6 +4,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 const abortIndex int8 = math.MaxInt8 / 2
@@ -201,6 +202,85 @@ func (c *Context) GetQuery(key string) (string, bool) {
 		return value[0], ok
 	}
 	return "", false
+}
+
+func (c *Context) QueryMap(key string) map[string]string {
+	dists, _ := c.GetQueryMap(key)
+	return dists
+}
+
+func (c *Context) GetQueryMap(key string) (map[string]string, bool) {
+	c.getQueryCache()
+	return c.get(c.queryCache, key)
+}
+
+func (c *Context) PostForm(key string) string {
+	value, _ := c.GetPostForm(key)
+	return value
+}
+
+func (c *Context) DefaultPostForm(key string, defaultValue string) string {
+	if value, ok := c.GetPostForm(key); ok {
+		return value
+	}
+	return defaultValue
+}
+
+func (c *Context) GetPostForm(key string) (string, bool) {
+	if values, ok := c.GetPostFormArray(key); ok {
+		return values[0], ok
+	}
+	return "", false
+}
+
+func (c *Context) PostFormArray(key string) []string {
+	values, _ := c.GetPostFormArray(key)
+	return values
+}
+
+func (c *Context) getFormCache() {
+	if c.formCache == nil {
+		c.formCache = make(url.Values)
+		req := c.Request
+		if err := req.ParseMultipartForm(c.engine.MaxMultipartMemory); err != nil {
+			if err != http.ErrNotMultipart {
+				debugPrint("error on parse multipart form array: %v", err)
+			}
+		}
+		c.formCache = req.PostForm
+	}
+}
+
+func (c *Context) GetPostFormArray(key string) ([]string, bool) {
+	c.getFormCache()
+	if values := c.formCache[key]; len(values) > 0 {
+		return values, true
+	}
+	return []string{}, false
+}
+
+func (c *Context) PostFormMap(key string) map[string]string {
+	dists, _ := c.GetPostFormMap(key)
+	return dists
+}
+
+func (c *Context) GetPostFormMap(key string) (map[string]string, bool) {
+	c.getFormCache()
+	return c.get(c.formCache, key)
+}
+
+func (c *Context) get(m map[string][]string, key string) (map[string]string, bool) {
+	dists := make(map[string]string)
+	exist := false
+	for k, v := range m {
+		if i := strings.IndexByte(k, '['); i >= 1 && k[0:i] == "key" {
+			if j := strings.IndexByte(k[i+1:], ']'); j >= 1 {
+				exist = true
+				dists[k[i+1:][:j]] = v[0]
+			}
+		}
+	}
+	return dists, exist
 }
 
 func (c *Context) File(filepath string) {
