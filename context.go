@@ -1,10 +1,14 @@
 package jin
 
 import (
+	"io"
 	"math"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
+	"time"
 )
 
 const abortIndex int8 = math.MaxInt8 / 2
@@ -159,7 +163,75 @@ func (c *Context) GetString(key string) (s string) {
 	return
 }
 
-// TODO more get
+func (c *Context) GetBool(key string) (b bool) {
+	if val, ok := c.Get(key); ok && val != nil {
+		b, _ = val.(bool)
+	}
+	return
+}
+
+func (c *Context) GetInt(key string) (i int) {
+	if val, ok := c.Get(key); ok && val != nil {
+		i, _ = val.(int)
+	}
+	return
+}
+
+func (c *Context) GetInt64(key string) (i64 int64) {
+	if val, ok := c.Get(key); ok && val != nil {
+		i64, _ = val.(int64)
+	}
+	return
+}
+
+func (c *Context) GetFloat64(key string) (f64 float64) {
+	if val, ok := c.Get(key); ok && val != nil {
+		f64, _ = val.(float64)
+	}
+	return
+}
+
+func (c *Context) GetTime(key string) (t time.Time) {
+	if val, ok := c.Get(key); ok && val != nil {
+		t, _ = val.(time.Time)
+	}
+	return
+}
+
+func (c *Context) GetDuration(key string) (d time.Duration) {
+	if val, ok := c.Get(key); ok && val != nil {
+		d, _ = val.(time.Duration)
+	}
+	return
+}
+
+func (c *Context) GetStringSlice(key string) (ss []string) {
+	if val, ok := c.Get(key); ok && val != nil {
+		ss, _ = val.([]string)
+	}
+	return
+}
+
+func (c *Context) GetStringMap(key string) (sm map[string]interface{}) {
+	if val, ok := c.Get(key); ok && val != nil {
+		sm, _ = val.(map[string]interface{})
+	}
+	return
+}
+
+func (c *Context) GetStringMapString(key string) (sms map[string]string) {
+	if val, ok := c.Get(key); ok && val != nil {
+		sms, _ = val.(map[string]string)
+	}
+	return
+}
+
+func (c *Context) GetStringMapStringSlice(key string) (smss map[string][]string) {
+	if val, ok := c.Get(key); ok && val != nil {
+		smss, _ = val.(map[string][]string)
+	}
+	return
+}
 
 func (c *Context) Param(key string) string {
 	return c.Params.ByName(key)
@@ -281,6 +353,39 @@ func (c *Context) get(m map[string][]string, key string) (map[string]string, boo
 		}
 	}
 	return dists, exist
+}
+
+// FormFile 返回提供表单键的第一个文件
+func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
+	if c.Request.MultipartForm == nil {
+		if err := c.Request.ParseMultipartForm(c.engine.MaxMultipartMemory); err != nil {
+			return nil, err
+		}
+	}
+	_, fh, err := c.Request.FormFile(name)
+	return fh, err
+}
+
+func (c *Context) MultipartFor() (*multipart.Form, error) {
+	err := c.Request.ParseMultipartForm(c.engine.MaxMultipartMemory)
+	return c.Request.MultipartForm, err
+}
+
+func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error {
+	src, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, src)
+	return err
 }
 
 func (c *Context) File(filepath string) {
