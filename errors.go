@@ -21,6 +21,11 @@ type errorMsgs []*Error
 
 var _ error = &Error{}
 
+func (msg *Error) SetType(flags ErrorType) *Error {
+	msg.Type = flags
+	return msg
+}
+
 func (msg *Error) Error() string {
 	return msg.Err.Error()
 }

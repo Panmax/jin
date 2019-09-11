@@ -2,8 +2,11 @@ package jin
 
 import (
 	"io"
+	"io/ioutil"
+	"jin/binding"
 	"math"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -386,6 +389,120 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error
 
 	_, err = io.Copy(out, src)
 	return err
+}
+
+// TODO Bind
+func (c *Context) Bind(object interface{}) error {
+	b := binding.Default(c.Request.Method, c.ContentType())
+	return c.MustBindWith(object, b)
+}
+
+func (c *Context) MustBindWith(obj interface{}, b binding.Binding) error {
+	if err := c.ShouldBindWith(obj, b); err != nil {
+		c.AbortWithError(http.StatusBadRequest, err).SetType(ErrorTypeBind)
+		return err
+	}
+	return nil
+}
+
+func (c *Context) ShouldBind(obj interface{}) error {
+	b := binding.Default(c.Request.Method, c.ContentType())
+	return c.ShouldBindWith(obj, b)
+}
+
+func (c *Context) ShouldBindWith(obj interface{}, b binding.Binding) error {
+	return b.Bind(c.Request, obj)
+}
+
+// ClientIp 实现一个最佳算法用来返回真实的客户端 IP
+// 它解析 X-Real-IP 和 X-Forwarded-For 为的是在反向代理：如 nginx 或 haproxy 下工作
+// X-Forwarded-For 先于 X-Real-Ip 是因为 nginx 使用 X-Real-ip 来作为代理的 IP
+func (c *Context) ClientIP() string {
+	if c.engine.ForwardedByClientIP {
+		clientIP := c.requestHeader("X-Forwarded-For")
+		clientIP = strings.TrimSpace(strings.Split(clientIP, ",")[0])
+		if clientIP == "" {
+			clientIP = strings.TrimSpace(c.requestHeader("X-Real-Ip"))
+		}
+		if clientIP != "" {
+			return clientIP
+		}
+	}
+
+	if c.engine.AppEngine {
+		if addr := c.requestHeader("X-Appengine-Remote-Addr"); addr != "" {
+			return addr
+		}
+	}
+
+	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.Request.RemoteAddr)); err == nil {
+		return ip
+	}
+	return ""
+}
+
+func (c *Context) ContentType() string {
+	return filterFlags(c.requestHeader("Content-Type"))
+}
+
+func (c *Context) IsWebsocket() bool {
+	if strings.Contains(strings.ToLower(c.requestHeader("Connection")), "upgrade") &&
+		strings.EqualFold(c.requestHeader("Upgrade"), "websocket") {
+		return true
+	}
+	return false
+}
+
+func (c *Context) requestHeader(key string) string {
+	return c.Request.Header.Get(key)
+}
+
+func bodyAllowedForStatus(status int) bool {
+	switch {
+	case status >= 100 && status <= 199:
+		return false
+	case status == http.StatusNoContent:
+		return false
+	case status == http.StatusNotModified:
+		return false
+	}
+	return true
+}
+
+func (c *Context) Status(code int) {
+	c.writermem.WriteHeader(code)
+}
+
+func (c *Context) GetHeader(key string) string {
+	return c.requestHeader(key)
+}
+
+func (c *Context) GetRawData() ([]byte, error) {
+	return ioutil.ReadAll(c.Request.Body)
+}
+
+func (c *Context) SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool) {
+	if path == "" {
+		path = "/"
+	}
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     name,
+		Value:    value,
+		MaxAge:   maxAge,
+		Path:     path,
+		Domain:   domain,
+		Secure:   secure,
+		HttpOnly: httpOnly,
+	})
+}
+
+func (c *Context) Cookie(name string) (string, error) {
+	cookie, err := c.Request.Cookie(name)
+	if err != nil {
+		return "", err
+	}
+	val, _ := url.QueryUnescape(cookie.Value)
+	return val, nil
 }
 
 func (c *Context) File(filepath string) {

@@ -12,6 +12,15 @@ func assert1(guard bool, text string) {
 	}
 }
 
+func filterFlags(content string) string {
+	for i, char := range content {
+		if char == ' ' || char == ';' {
+			return content[:i]
+		}
+	}
+	return content
+}
+
 func lastChar(str string) uint8 {
 	if str == "" {
 		panic("The length of the string can't be 0")
