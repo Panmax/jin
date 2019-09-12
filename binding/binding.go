@@ -14,6 +14,23 @@ type Binding interface {
 	Bind(*http.Request, interface{}) error
 }
 
+type BindingBody interface {
+	Binding
+	BindBody([]byte, interface{}) error
+}
+
+type BindingUri interface {
+	Name() string
+	BindUri(map[string][]string, interface{}) error
+}
+
+type StructValidator interface {
+	ValidateStruct(interface{}) error
+	Engine() interface{}
+}
+
+var Validator StructValidator = &defaultValidator{}
+
 var (
 	JSON = jsonBinding{}
 	XML  = xmlBinding{}
@@ -31,4 +48,11 @@ func Default(method, contentType string) Binding {
 	case MIMEXML, MIMEXML2:
 		return XML
 	}
+}
+
+func validate(obj interface{}) error {
+	if Validator == nil {
+		return nil
+	}
+	return Validator.ValidateStruct(obj)
 }
